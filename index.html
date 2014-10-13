@@ -31,11 +31,33 @@
 <!-- Begin slides. Just make elements with a class of slide. -->
 
 <section class="slide">
-	<h1>Method objects</h1>
+  <h1>Disclaimer</h1>
 </section>
 
 <section class="slide">
-	<h1>Disclaimer</h1>
+  <div>
+    <h1>Promise</h1>
+  </div>
+</section>
+
+<section class="slide">
+  <div>
+    <h1>Er... actually Future</h1>
+  </div>
+</section>
+
+<section class="slide">
+	<h2>Let's talk about types</h2>
+
+  <div>
+    <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
+      # @return Promise<User>
+      def find_user(id)
+        user_data = perform_lengthy_io
+        return build_user_object(user_data)
+      end
+    </textarea>
+  </div>
 </section>
 
 <section class="slide">
