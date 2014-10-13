@@ -93,7 +93,7 @@
         require "concurrent-ruby"
 
         def promise
-          Concurrent::Promise { yield }
+          Concurrent::Promise.execute { yield }
         end
       </textarea>
     </div>
@@ -138,6 +138,104 @@
         flat_map { |user| fetch_tweets_from_the_internet(user) }.
         then { |tweets| render(tweets) }.
         catch { |e| Logger.fatal(e) }
+    </textarea>
+  </div>
+</section>
+
+<section class="slide">
+  <h1>Intermission - Executors</h1>
+</section>
+
+
+<section class="slide">
+  <h2>Actors</h2>
+
+  <div class="slide">
+    <hr/>
+
+    <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
+      class TweetCreator < Concurrent::Actor::RestartingContext
+        def on_message(msg)
+          user = find_user(msg[:user_id])
+          tweet = prepare_tweet(user, msg[:params])
+          save_tweet(tweet)
+        end
+
+        private
+        def find_user ... end
+
+        def prepare_tweet ... end
+
+        def save_tweet ... end
+      end
+
+      actor = TweetCreator.spawn("main_tweet_creator")
+      actor << {user_id: 10, params: { ... }}
+    </textarea>
+  </div>
+</section>
+
+<section class="slide">
+  <h2>Actors</h2>
+
+  <div>
+    <hr/>
+
+    <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
+      class TweetCreator < Concurrent::Actor::RestartingContext
+        def on_message(msg)
+          case msg
+          when CreateTweet then user_fetcher << find_user(msg)
+          when UserFound then tweet_saver << prepare_tweet(msg)
+          end
+        end
+
+        private
+        def prepare_tweet ... end
+
+        def user_fetcher
+          ImaginaryActorRegistry.get(:user_fetcher)
+        end
+
+        def tweet_saver ... end
+      end
+
+      actor = TweetCreator.spawn("main_tweet_creator")
+      actor << {user_id: 10, params: { ... }}
+    </textarea>
+  </div>
+</section>
+
+<section class="slide">
+  <h2>Actors</h2>
+
+  <div>
+    <hr/>
+
+    <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
+      class TweetCreator < Concurrent::Actor::RestartingContext
+        def on_message(msg)
+          find_user(msg[:user_id]).
+            then { |user| prepare_tweet(user, msg[:params]) }.
+            flat_map { |tweet| save_tweet(tweet) }.
+            catch { |e| Logger.fatal(e) }
+        end
+
+        private
+        def find_user(id)
+          Concurrent::Promise.execute(executor: db_executor) { db_code }
+        end
+
+        def prepare_tweet ... end
+
+        def save_tweet(tweet)
+          Concurrent::Promise.execute(executor: db_executor) { db_code }
+        end
+
+        def db_executor
+          @db_executor ||= Concurrent::ThreadPoolExecutor.new(max_threads: 4)
+        end
+      end
     </textarea>
   </div>
 </section>
