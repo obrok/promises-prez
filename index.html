@@ -51,185 +51,95 @@
 
   <div>
     <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
-      # @return Promise<User>
+      # @return User
       def find_user(id)
         user_data = perform_lengthy_io
         return build_user_object(user_data)
       end
+
+
+      find_user(10).delete
     </textarea>
   </div>
-</section>
-
-<section class="slide">
-  <h2>Let's take your typical Rails action...</h2>
 
   <div>
-    <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
-    class PostsController
-      def show
-        if current_user.admin?
-          viewing_user = User.find(params[:as_user_id])
-        else
-          viewing_user = current_user
+    <h2 class="slide">Well that's not nice</h2>
+
+    <div class="slide">
+      <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
+        # Warning! Uses #promise magic method
+        # @return Promise<User>
+
+        def find_user(id)
+          promise do
+            user_data = perform_lengthy_io
+            return build_user_object(user_data)
+          end
         end
 
-        post = viewing_user.posts.
-          where(:id => params[:id]).
-          first
 
-        comments = post.comments.visible_to(user).all
-
-        respond_with [post] + comments
-      end
-    end
-    </textarea>
+        find_user(10).then { |user| user.delete }
+      </textarea>
+    </div>
   </div>
 </section>
 
 <section class="slide">
-  <h2>You might refactor if it gets too bulky</h2>
-
   <div>
-    <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
-    class PostsController
-      def show
-        [...]
+    <h2>Meanwhile in concurrent-ruby</h2>
 
-        user = viewing_user
-        post = post(user)
-        comments = comments(user, post)
+    <div>
+      <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
+        require "concurrent-ruby"
 
-        respond_with [post] + comments
-      end
-
-      private
-      def viewing_user
-        if current_user.admin?
-          User.find(params[:as_user_id])
-        else
-          current_user
+        def promise
+          Concurrent::Promise { yield }
         end
-      end
-
-      def post(user)
-        user.posts.where(:id => params[:id]).first
-      end
-
-      def comments(user, post)
-        post.comments.visible_to(user).all
-      end
-    end
-    </textarea>
+      </textarea>
+    </div>
   </div>
 </section>
 
 <section class="slide">
-  <h2>The methods share a lot of context...</h2>
+	<h2>Composability</h2>
+
   <div class="slide">
-    <h3>
-      This can also easily happen if you decide to make something static, and
-      it grows like a cancer
-    </h3>
-
     <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
-module PostHelper
-  def self.filter_posts(initial_context, params)
-    if params[:title]
-      initial_context = filter_by_title(initial_context, params[:title])
-    end
-    if params[:content]
-      initial_context = filter_by_content(initial_context, params[:content])
-    end
-  end
-
-  def self.filter_by_title(context, title)
-    context.where(:title => title)
-  end
-
-  def self.filter_by_title(context, content)
-    context.where("content like ?", "%#{content}")
-  end
-
-  # And so on
-end
+      find_user(10).
+        then { |user| create_tweet(user, params) }.
+        then { |tweet| render(tweet) }
     </textarea>
   </div>
 
-  <h3 class="slide">This bunch of functions is begging you to become a class</h3>
-  <h3 class="slide">Seriously, they wanted to be a class since they were five</h3>
-</section>
+  <div class="slide">
+    <hr/>
 
-<section class="slide">
-  <h2>Method objects to the rescue!</h2>
+    <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
+      find_user(10).zip(find_user(20)).
+        then { |(user1, user2)| create_mention(of: user1, by: user2) }
+    </textarea>
+  </div>
 
-  <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
-    class FeedGenerator
-      def initialize(user, post_id)
-        @user = user
-        @post_id = post_id
-      end
+  <div class="slide">
+    <hr/>
 
-      def feed
-        [post] + comments
-      end
+    <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
+      find_user(10).
+        flat_map { |user| fetch_tweets_from_the_internet(user) }.
+        then { |tweets| render(tweets) }
+    </textarea>
+  </div>
 
-      private
-      def post
-        user.posts.where(:id => post_id).first
-      end
+  <div class="slide">
+    <hr/>
 
-      def comments
-        post.comments.visible_to(user).all
-      end
-    end
-  </textarea>
-</section>
-
-<section class="slide">
-  <h2>
-    You can top off with some immutability, laziness/memoization and a
-    convenience static method, et voilà
-  </h2>
-
-  <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
-    require "immutable_struct"
-
-    class FeedGenerator < ImmutableStruct.new(:user, :post_id)
-      def self.feed(user, post_id)
-        new(user, post_id).feed
-      end
-
-      def feed
-        @feed ||= [post] + comments
-      end
-
-      private
-      def post
-        @post ||= viewing_user.posts
-          where(:id => post_id).
-          first
-      end
-
-      def comments
-        @comments ||= post.comments.visible_to(user).all
-      end
-    end
-  </textarea>
-</section>
-
-<section class="slide">
-  <h2>Method objects</h2>
-  <h3 class="slide">Give you an easy way to share context between methods</h3>
-  <h3 class="slide">
-    Allow you to extract coherent pieces of business logic away
-    from controllers so that they can only deal with HTTP
-    (Rails-specific, but you get the idea)
-  </h3>
-  <h3 class="slide">Have a well defined public interface and so are easily testable</h3>
-</section>
-
-<section class="slide">
-	<h1>Questions?</h1>
+    <textarea id="code" name="code" class="code" mode="ruby" style="display: none;">
+      find_user(10).
+        flat_map { |user| fetch_tweets_from_the_internet(user) }.
+        then { |tweets| render(tweets) }.
+        catch { |e| Logger.fatal(e) }
+    </textarea>
+  </div>
 </section>
 
 <!-- End slides. -->
